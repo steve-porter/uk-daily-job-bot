@@ -128,6 +128,15 @@ function formatShortUkDate(date = new Date()) {
   }).format(date);
 }
 
+function formatIsoUkDate(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: "Europe/London",
+  }).format(date);
+}
+
 function filterAndDeduplicate(candidates, seenData, profile) {
   const seenUrls = new Set();
   const seenKeys = new Set();
@@ -482,7 +491,11 @@ function updateSeenJobs(seenData, sentJobs) {
     });
   }
 
-  fs.writeFileSync(SEEN_PATH, JSON.stringify({ jobs: kept }, null, 2) + "\n", "utf8");
+  fs.writeFileSync(
+    SEEN_PATH,
+    JSON.stringify({ last_sent_uk_date: formatIsoUkDate(), jobs: kept }, null, 2) + "\n",
+    "utf8"
+  );
 }
 
 async function main() {
@@ -523,6 +536,22 @@ async function main() {
   const rawInput = readJson(args.input, []);
   const candidates = Array.isArray(rawInput) ? rawInput : rawInput.jobs || [];
   const seenData = readJson(SEEN_PATH, { jobs: [] });
+  const isOverride = Boolean(args.toOverride || (env.TEST_RECIPIENT || "").trim());
+
+  if (env.ONCE_PER_DAY === "true" && !args.dryRun && !isOverride) {
+    const todayUk = formatIsoUkDate();
+    const alreadySentToday =
+      seenData.last_sent_uk_date === todayUk ||
+      (seenData.jobs || []).some((j) => {
+        if (!j.sent_at) return false;
+        const d = new Date(j.sent_at);
+        return !Number.isNaN(d.getTime()) && formatIsoUkDate(d) === todayUk;
+      });
+    if (alreadySentToday) {
+      console.log(`Already sent today's digest (${todayUk} UK). Skipping backup slot.`);
+      return;
+    }
+  }
 
   const { fresh, skipped } = filterAndDeduplicate(candidates, seenData, profile);
   console.log(
@@ -587,7 +616,6 @@ async function main() {
   const sentCopyPath = path.join(__dirname, "last-digest.html");
   fs.writeFileSync(sentCopyPath, html, "utf8");
 
-  const isOverride = Boolean(args.toOverride || (env.TEST_RECIPIENT || "").trim());
   if (!isOverride) {
     updateSeenJobs(seenData, fresh);
     console.log(`SENT: Emailed ${fresh.length} job(s) to ${recipient} and updated seen-jobs.json.`);
