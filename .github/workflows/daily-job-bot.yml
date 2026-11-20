@@ -1,0 +1,80 @@
+name: Daily Job Bot
+
+on:
+  schedule:
+    # Fires at 07:00 and 08:00 UTC so the UK GMT/BST guard below always runs once at 8:00 AM UK time
+    - cron: "0 7 * * *"
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+    inputs:
+      test_recipient:
+        description: "Optional test email address (leave blank to email profile.json recipient and update seen-jobs.json)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  daily-digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check UK 8:00 AM schedule (skip duplicate DST slot)
+        id: tz_guard
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            UK_TZ=$(TZ="Europe/London" date +%Z)
+            SCHED="${{ github.event.schedule }}"
+            echo "UK timezone: $UK_TZ | Triggered cron: $SCHED"
+            if [ "$UK_TZ" = "GMT" ] && [ "$SCHED" != "0 8 * * *" ]; then
+              echo "UK is on GMT (UTC+0); skipping 07:00 UTC slot."
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if [ "$UK_TZ" = "BST" ] && [ "$SCHED" != "0 7 * * *" ]; then
+              echo "UK is on BST (UTC+1); skipping 08:00 UTC slot."
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout repository
+        if: steps.tz_guard.outputs.should_run == 'true'
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        if: steps.tz_guard.outputs.should_run == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Fetch fresh UK jobs
+        if: steps.tz_guard.outputs.should_run == 'true'
+        env:
+          REED_API_KEY: ${{ secrets.REED_API_KEY }}
+          ADZUNA_APP_ID: ${{ secrets.ADZUNA_APP_ID }}
+          ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
+        run: node fetch-jobs.mjs
+
+      - name: Send daily job digest email
+        if: steps.tz_guard.outputs.should_run == 'true'
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          FROM_NAME: ${{ secrets.FROM_NAME }}
+          TEST_RECIPIENT: ${{ github.event.inputs.test_recipient }}
+        run: node send-digest.mjs
+
+      - name: Save updated seen-jobs.json
+        if: steps.tz_guard.outputs.should_run == 'true' && github.event.inputs.test_recipient == ''
+        run: |
+          git config user.name "Daily Job Bot"
+          git config user.email "actions@users.noreply.github.com"
+          if ! git diff --quiet seen-jobs.json; then
+            git add seen-jobs.json
+            git commit -m "chore: record sent jobs ($(TZ='Europe/London' date +%Y-%m-%d))"
+            git push
+          else
+            echo "No changes to seen-jobs.json."
+          fi

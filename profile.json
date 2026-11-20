@@ -1,0 +1,56 @@
+{
+  "recipient": {
+    "name": "Alex",
+    "email": "you@example.com"
+  },
+  "email_subtitle": "London & Remote",
+  "locations": [
+    "London",
+    "Remote UK"
+  ],
+  "roles": [
+    "Product Manager",
+    "AI Product Manager",
+    "Delivery Manager",
+    "Operations Manager"
+  ],
+  "search_queries": [
+    { "keywords": "product manager", "location": "London", "radius_miles": 10, "category": "Product Management" },
+    { "keywords": "ai product manager", "location": "London", "radius_miles": 15, "category": "AI & Tech" },
+    { "keywords": "delivery manager", "location": "London", "radius_miles": 10, "category": "Delivery" },
+    { "keywords": "operations manager", "location": "London", "radius_miles": 10, "category": "Operations" }
+  ],
+  "scoring_keywords": [
+    { "term": "ai product manager", "points": 18 },
+    { "term": "product manager", "points": 15 },
+    { "term": "delivery manager", "points": 12 },
+    { "term": "operations manager", "points": 10 },
+    { "term": "saas", "points": 8 },
+    { "term": "remote", "points": 6 },
+    { "term": "hybrid", "points": 5 }
+  ],
+  "priority_locations": [
+    { "place": "central london", "points": 14 },
+    { "place": "london", "points": 10 },
+    { "place": "remote", "points": 10 }
+  ],
+  "penalised_title_terms": [
+    "director",
+    "vp",
+    "vice president",
+    "chief",
+    "ceo",
+    "cfo",
+    "intern",
+    "graduate"
+  ],
+  "excluded_keywords": [
+    "unpaid",
+    "volunteer",
+    "commission only",
+    "apprentice"
+  ],
+  "max_age_days": 7,
+  "max_jobs_per_email": 12,
+  "max_per_category": 4
+}
